@@ -1,6 +1,6 @@
 # Coursera Dump
 
-This scrip extract information about 20 random courses from coursera.org website. And save it into xlsx document.
+This script extract information about 20 random courses from coursera.org website. And save it into xlsx document.
 
 # How to Install
 
