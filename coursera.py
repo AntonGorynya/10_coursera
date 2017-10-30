@@ -46,8 +46,7 @@ def get_course_info(course_url):
     if course_duration:
         course_duration = course_duration[-1].text[5:]
     else:
-        course_duration = None
-    print(course_name)
+        course_duration = None    
     return {'course_name': course_name,
             'course_lang': course_lang,
             'assesment': assesment,
