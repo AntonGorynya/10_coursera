@@ -2,10 +2,12 @@ import requests
 from bs4 import BeautifulSoup
 import random
 from openpyxl import Workbook
+import argparse
+import re
 
 
 XML_COURSE_LIST = 'https://www.coursera.org/sitemap~www~courses.xml'
-COURSE_COUNT = 20
+COURSE_COUNT = 10
 
 
 def get_courses_list():
@@ -17,15 +19,23 @@ def get_courses_list():
 
 
 def get_course_info(course_url):
-    response = requests.get(course_url)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    course_name = soup.find('h1', class_='title display-3-text').text
-    course_lang = soup.find('div', class_='rc-Language').text
+    response = requests.get(url=course_url)
+    soup = BeautifulSoup(response.text.encode('utf-8'), 'html.parser')
+    course_name = soup.find('h1', class_='title display-3-text')
+    if course_name:
+        course_name = course_name.text
+    else:
+        course_name = None
+    course_lang = soup.find('div', class_='rc-Language')
+    if course_lang:
+        course_lang = course_lang.text
+    else:
+        course_lang = None
     assesment = soup.find('div',
                           class_='rc-RatingsHeader horizontal-box'
                                  ' align-items-absolute-center')
     if assesment:
-        assesment = assesment.text[6:9]
+        assesment = re.search(r'[\d.]+', assesment.text).group()
     else:
         assesment = None
     start_date = soup.find('div',
@@ -34,9 +44,10 @@ def get_course_info(course_url):
     course_duration = soup.find_all('div',
                                     class_='week-heading body-2-text')
     if course_duration:
-        course_duration = course_duration[-1].text
+        course_duration = course_duration[-1].text[5:]
     else:
         course_duration = None
+    print(course_name)
     return {'course_name': course_name,
             'course_lang': course_lang,
             'assesment': assesment,
@@ -52,7 +63,7 @@ def output_courses_info_to_xlsx(filepath, courses_info):
                 'Course lang',
                 'Assesment',
                 'Start date',
-                'Course duration'])
+                'Course duration in weeks'])
     for course_info in courses_info:
         exel_row = [course_info['course_name'],
                     course_info['course_lang'],
@@ -63,10 +74,18 @@ def output_courses_info_to_xlsx(filepath, courses_info):
     wb.save(filename=filepath)
 
 
+def create_parser():
+    parser = argparse.ArgumentParser(description='course_info')
+    parser.add_argument("output_file", nargs='?', const=1,
+                        default='book.xlsx',
+                        type=str, help="path to output file")
+    return parser
+
+
 if __name__ == '__main__':
     courses_info = []
-    dest_filename = 'course_info_book.xlsx'
+    parser = create_parser()
+    args = parser.parse_args()
     for course_url in get_courses_list():
-        print(course_url)
         courses_info.append(get_course_info(course_url))
-    output_courses_info_to_xlsx(dest_filename, courses_info)
+    output_courses_info_to_xlsx(args.output_file, courses_info)
