@@ -7,46 +7,59 @@ import re
 
 
 XML_COURSE_LIST = 'https://www.coursera.org/sitemap~www~courses.xml'
-COURSE_COUNT = 10
+COURSE_COUNT = 20
 
 
 def get_courses_list():
     response = requests.get(XML_COURSE_LIST)
     soup = BeautifulSoup(response.text, 'lxml')
     course_list = [course.text for course in soup.body.find_all('loc')]
+    return course_list
+
+
+def get_random_course(course_list):
     random_course = random.sample(course_list, COURSE_COUNT)
     return random_course
 
 
-def get_course_info(course_url):
+def get_course_page(course_url):
     response = requests.get(url=course_url)
-    soup = BeautifulSoup(response.text.encode('utf-8'), 'html.parser')
-    course_name = soup.find('h1', class_='title display-3-text')
+    response.encoding = 'UTF-8'
+    html = BeautifulSoup(response.text, 'html.parser')
+    return html
+
+
+def get_course_info(html):
+    course_name = html.find('h1', class_='title display-3-text')
     if course_name:
         course_name = course_name.text
     else:
         course_name = None
-    course_lang = soup.find('div', class_='rc-Language')
+    course_lang = html.find('div', class_='rc-Language')
     if course_lang:
         course_lang = course_lang.text
     else:
         course_lang = None
-    assesment = soup.find('div',
+    assesment = html.find('div',
                           class_='rc-RatingsHeader horizontal-box'
                                  ' align-items-absolute-center')
     if assesment:
         assesment = re.search(r'[\d.]+', assesment.text).group()
     else:
         assesment = None
-    start_date = soup.find('div',
+    start_date = html.find('div',
                            class_='startdate rc-StartDateString'
-                                  ' caption-text').text
-    course_duration = soup.find_all('div',
+                                  ' caption-text')
+    if start_date:
+        start_date = re.search(r'\w+ \d+', start_date.text).group()
+    else:
+        start_date = None
+    course_duration = html.find_all('div',
                                     class_='week-heading body-2-text')
     if course_duration:
         course_duration = course_duration[-1].text[5:]
     else:
-        course_duration = None    
+        course_duration = None
     return {'course_name': course_name,
             'course_lang': course_lang,
             'assesment': assesment,
@@ -54,21 +67,34 @@ def get_course_info(course_url):
             'course_duration': course_duration}
 
 
-def output_courses_info_to_xlsx(filepath, courses_info):
+def create_table_content(courses_info):
+    table_head = [['Course name',
+                   'Course lang',
+                   'Assesment',
+                   'Start date',
+                   'Course duration in weeks']]
+    table_content = [[course_info['course_name'],
+                      course_info['course_lang'],
+                      course_info['assesment'],
+                      course_info['start_date'],
+                      course_info['course_duration']]
+                     for course_info in courses_info]
+    table = table_head + table_content
+    return table
+
+
+def output_courses_info_to_xlsx(filepath, table):
     wb = Workbook()
     ws1 = wb.active
     ws1.title = "course_info"
-    ws1.append(['Course name',
-                'Course lang',
-                'Assesment',
-                'Start date',
-                'Course duration in weeks'])
-    for course_info in courses_info:
-        exel_row = [course_info['course_name'],
-                    course_info['course_lang'],
-                    course_info['assesment'],
-                    course_info['start_date'],
-                    course_info['course_duration']]
+    ws1.column_dimensions['A'].width = 30.0
+    ws1.column_dimensions['B'].width = 10.0
+    ws1.column_dimensions['C'].width = 10.0
+    ws1.column_dimensions['D'].width = 10.0
+    ws1.column_dimensions['E'].width = 20.0
+    table_head, table_content = table[0], table[1::]
+    ws1.append(table_head)
+    for exel_row in table_content:
         ws1.append(exel_row)
     wb.save(filename=filepath)
 
@@ -82,9 +108,9 @@ def create_parser():
 
 
 if __name__ == '__main__':
-    courses_info = []
     parser = create_parser()
     args = parser.parse_args()
-    for course_url in get_courses_list():
-        courses_info.append(get_course_info(course_url))
-    output_courses_info_to_xlsx(args.output_file, courses_info)
+    courses_info = [get_course_info(get_course_page(course_url))
+                    for course_url in get_random_course(get_courses_list())]
+    output_courses_info_to_xlsx(args.output_file,
+                                create_table_content(courses_info))
