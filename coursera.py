@@ -2,12 +2,13 @@ import requests
 from bs4 import BeautifulSoup
 import random
 from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 import argparse
 import re
 
 
 XML_COURSE_LIST = 'https://www.coursera.org/sitemap~www~courses.xml'
-COURSE_COUNT = 20
+COURSE_COUNT = 1
 
 
 def get_courses_list():
@@ -15,11 +16,6 @@ def get_courses_list():
     soup = BeautifulSoup(response.text, 'lxml')
     course_list = [course.text for course in soup.body.find_all('loc')]
     return course_list
-
-
-def get_random_course(course_list):
-    random_course = random.sample(course_list, COURSE_COUNT)
-    return random_course
 
 
 def get_course_page(course_url):
@@ -68,35 +64,37 @@ def get_course_info(html):
 
 
 def create_table_content(courses_info):
-    table_head = [['Course name',
-                   'Course lang',
-                   'Assesment',
-                   'Start date',
-                   'Course duration in weeks']]
+    table_head_param = [{'Course name': 30.0},
+                        {'Course lang': 10.0},
+                        {'Assesment': 10.0},
+                        {'Start date': 10.0},
+                        {'Course duration in weeks': 20.0}]
     table_content = [[course_info['course_name'],
                       course_info['course_lang'],
                       course_info['assesment'],
                       course_info['start_date'],
                       course_info['course_duration']]
                      for course_info in courses_info]
-    table = table_head + table_content
-    return table
+    return table_head_param, table_content
 
 
-def output_courses_info_to_xlsx(filepath, table):
+def output_courses_info_to_xlsx(table_head_param, table_content):
     wb = Workbook()
     ws1 = wb.active
-    ws1.title = "course_info"
-    ws1.column_dimensions['A'].width = 30.0
-    ws1.column_dimensions['B'].width = 10.0
-    ws1.column_dimensions['C'].width = 10.0
-    ws1.column_dimensions['D'].width = 10.0
-    ws1.column_dimensions['E'].width = 20.0
-    table_head, table_content = table[0], table[1::]
+    table_head = []
+    for col_number, col_param in enumerate(table_head_param):
+        col_name, col_width = list(col_param.items())[0]
+        letter = get_column_letter(col_number+1)
+        ws1.column_dimensions[letter].width = col_width
+        table_head.append(col_name)
     ws1.append(table_head)
     for exel_row in table_content:
         ws1.append(exel_row)
-    wb.save(filename=filepath)
+    return wb
+
+
+def save_workbook(workbook, filepath):
+    workbook.save(filepath)
 
 
 def create_parser():
@@ -111,6 +109,7 @@ if __name__ == '__main__':
     parser = create_parser()
     args = parser.parse_args()
     courses_info = [get_course_info(get_course_page(course_url))
-                    for course_url in get_random_course(get_courses_list())]
-    output_courses_info_to_xlsx(args.output_file,
-                                create_table_content(courses_info))
+                    for course_url in random.sample(get_courses_list(),
+                                                    COURSE_COUNT)]
+    workbook = output_courses_info_to_xlsx(*create_table_content(courses_info))
+    save_workbook(workbook, args.output_file)
